@@ -29,7 +29,7 @@ public class AppSender extends AbstractApplication implements Receiver {
 	
 	@Override
 	public void Receive(byte[] data) {
-		System.out.println("Received data (" + data.toString() + ")");
+		System.out.println("Received data (" + new String(data) + ")");
 	}
 
 	@Override

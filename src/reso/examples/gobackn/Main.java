@@ -1,10 +1,13 @@
 package reso.examples.gobackn;
+import java.util.Arrays;
+
 import reso.common.Link;
 import reso.common.Network;
 import reso.ethernet.EthernetAddress;
 import reso.ethernet.EthernetFrame;
 import reso.ethernet.EthernetInterface;
 import reso.ip.IPAddress;
+import reso.ip.IPEthernetAdapter;
 import reso.ip.IPHost;
 import reso.ip.IPRouter;
 import reso.scheduler.AbstractScheduler;
@@ -16,6 +19,8 @@ public class Main {
 	public static final int INITIAL_WINDOW_SIZE = 8;
 
 	public static void main(String[] args) {
+		
+		
 		AbstractScheduler scheduler= new Scheduler();
 		Network network= new Network(scheduler);
     	try {
@@ -46,14 +51,25 @@ public class Main {
     		//GBNCCProtocol routerProto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, router, "R1_GBNCC");
     		//router.addApplication(routerProto);
 
-    		EthernetInterface h1_eth0= (EthernetInterface) host1.getInterfaceByName("eth0");
-    		EthernetInterface h2_eth0= (EthernetInterface) host2.getInterfaceByName("eth0");
-    		EthernetInterface r1_eth0= (EthernetInterface) router.getInterfaceByName("eth0");
-    		EthernetInterface r1_eth1= (EthernetInterface) router.getInterfaceByName("eth1");
+//    		EthernetInterface h1_eth0= (EthernetInterface) host1.getInterfaceByName("eth0");
+//    		EthernetInterface h2_eth0= (EthernetInterface) host2.getInterfaceByName("eth0");
+//    		EthernetInterface r1_eth0= (EthernetInterface) router.getInterfaceByName("eth0");
+//    		EthernetInterface r1_eth1= (EthernetInterface) router.getInterfaceByName("eth1");
+//    		
     		
     		// Connect both interfaces h1 to r1 and r1 to h2 with a 5000km long link
-    		new Link<EthernetFrame>(h1_eth0, r1_eth0, 5000000, 100000);
-    		new Link<EthernetFrame>(r1_eth1, h2_eth0, 5000000, 100000);
+    		//new Link<EthernetFrame>(h1_eth0, r1_eth0, 5000000, 100000);
+    		//new Link<EthernetFrame>(r1_eth1, h2_eth0, 5000000, 100000);
+
+    		NetworkBuilder.createLink(host1, "eth0", router, "eth0", 5000000, 100000);
+    		NetworkBuilder.createLink(router, "eth1", host2, "eth0", 5000000, 100000);
+    		
+    		((IPEthernetAdapter) host1.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR1, MAC_ADDR3);
+    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR2, MAC_ADDR1);
+    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth1")).addARPEntry(IP_ADDR4, MAC_ADDR2);
+    		((IPEthernetAdapter) host2.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR3, MAC_ADDR4);
+    		
+    		
 
     		host1.start();
     		host2.start();

@@ -1,5 +1,7 @@
 package reso.examples.gobackn;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 
 import reso.common.AbstractApplication;
 import reso.common.AbstractTimer;
@@ -16,12 +18,14 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	
 	private final IPLayer _ip;
 	private final int _windowSize;
-	private ArrayList<Message> _window;
+	private HashMap<Integer, Message> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
 	public static final int TIMER_RESEND_INTERVAL = 20;  // 20 might not be good value
+	public static final int MSS = 10;  // bytes
 	private Message _ack = null;
 	private final IPAddress _dst;
+	private final RenoCC _cc;
 	
 	// As a receiver
 	private int _expSeqNb = 0;
@@ -34,8 +38,10 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	
 	public GBNCCProtocol(int windowSize, Host host, IPAddress dst, String name){
 		super(host, name);
+		_cc = new RenoCC();
 		_ip = ((IPHost)host).getIPLayer();
 		_dst = dst;
+		_window = new HashMap<>();
 		_windowSize = windowSize;
 		_resendTimer = new AbstractTimer(host.getNetwork().getScheduler(), TIMER_RESEND_INTERVAL, false) {
 			
@@ -46,11 +52,10 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		};
 	}
 	
-	public void send(byte[] data) throws Exception{
-		if(_nextSeqNb < _sendBase + _windowSize){
-			
+	private void sendData(byte[] data) throws Exception{
+		if(_nextSeqNb < _sendBase + _windowSize){		
 			Message packet = new GBNCCMessage(_nextSeqNb, false, data);
-			_window.set(_nextSeqNb - _sendBase, packet);
+			_window.put(_nextSeqNb - _sendBase, packet);
 			
 			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, packet);
 			
@@ -62,6 +67,24 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		}else{
 			//// ?? BLOCK APP
 		}
+	}
+	
+	public void send(byte[] data) throws Exception{
+		
+		if(data.length > MSS){
+			
+			int packetN = (int)Math.ceil(((float)data.length / MSS)); // Number of packet when splitted in MSS
+			
+			for(int i = 0; i < packetN; i++){
+				 byte[] packet = Arrays.copyOfRange(data, i * MSS, i * MSS + MSS); // 0 to MSS (0 to 19)  then MSS to MSS + MSS (20 to 39)
+				 sendData(packet);
+			}
+			
+		}else{
+			sendData(data);
+		}
+		
+		
 	}
 
 	private void startTimer() {
@@ -77,7 +100,10 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 		startTimer();
 		
-		for(Message m : _window){
+		_cc.timeout();
+		
+		for(int i = 0; i < _nextSeqNb; i++){
+			Message m = _window.get(i);
 			try {
 				_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
 			} catch (Exception e) {
@@ -95,6 +121,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 		if(pck._checksum == pck.getChecksum()){ // Not corrupted
 			if(pck.isACK()){ // ACK Packet is received from receiver
+				_cc.receiveACK(pck._seqNb);
 				_sendBase = pck._seqNb + 1;
 				if(_sendBase == _nextSeqNb){
 					stopTimer();

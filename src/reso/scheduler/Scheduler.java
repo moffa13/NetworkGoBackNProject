@@ -78,7 +78,7 @@ extends AbstractScheduler {
     	try {
     		evt.run();
     	} catch (Exception e) {
-    		System.out.println("Scheduler " + String.format("%.6f", getCurrentTime()) + " - " + e.getMessage());
+    		System.out.println("Error Scheduler " + String.format("%.6f", getCurrentTime()) + " - " + e.getMessage());
     		System.out.flush();
     		if (stopOnError)
     			throw new RuntimeException("Simulator stopped - " + e.getMessage());
