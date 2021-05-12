@@ -1,8 +1,6 @@
 package reso.examples.gobackn;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-
 import reso.common.AbstractApplication;
 import reso.common.AbstractTimer;
 import reso.common.Host;
@@ -65,24 +63,38 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			
 			_nextSeqNb++;
 		}else{
-			//// ?? BLOCK APP
+			throw new RuntimeException("ERR");
 		}
 	}
 	
-	public void send(byte[] data) throws Exception{
+	public boolean canWindowHandle(int MSSBlock){
+		return _windowSize + _sendBase - _nextSeqNb >= MSSBlock;
+	}
+	
+	public boolean send(byte[] data) throws Exception{
 		
-		if(data.length > MSS){
+		if(data.length > MSS){ // Data needs to be split because data > MSS
 			
-			int packetN = (int)Math.ceil(((float)data.length / MSS)); // Number of packet when splitted in MSS
+			int packetN = (int)Math.ceil(((float)data.length / MSS)); // Number of packet when split in MSS
+			
+			if(!canWindowHandle(packetN)) // Sliding window can not take all the packets
+				return false;
 			
 			for(int i = 0; i < packetN; i++){
 				 byte[] packet = Arrays.copyOfRange(data, i * MSS, i * MSS + MSS); // 0 to MSS (0 to 19)  then MSS to MSS + MSS (20 to 39)
 				 sendData(packet);
 			}
 			
+			return true;
+			
 		}else{
-			sendData(data);
+			if(canWindowHandle(1)){
+				sendData(data);
+				return true;
+			}	
 		}
+		
+		return false;
 		
 		
 	}
