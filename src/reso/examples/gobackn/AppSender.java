@@ -19,14 +19,17 @@ public class AppSender extends AbstractApplication implements Receiver {
 			@Override
 			protected void run() throws Exception {
 				System.out.println("Sending dummy");
-				_ppl.send("Hello " + String.valueOf(_dummy++), dst);				
+				StringBuilder stb = new StringBuilder();
+				stb.append("Hello ");
+				stb.append(_dummy++);
+				_ppl.send(stb.toString().getBytes());				
 			}
 		};
 	}
 	
 	@Override
-	public void Receive(String data) {
-		System.out.println("Received data (" + data + ")");
+	public void Receive(byte[] data) {
+		System.out.println("Received data (" + data.toString() + ")");
 	}
 
 	@Override

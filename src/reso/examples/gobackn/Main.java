@@ -30,12 +30,12 @@ public class Main {
 
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR2, MAC_ADDR1);
     		host1.getIPLayer().addRoute(IP_ADDR1, "eth0"); // Route to R1
-    		GBNCCProtocol host1proto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, host1, "H1_GBNCC");
+    		GBNCCProtocol host1proto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, host1, IP_ADDR4, "H1_GBNCC");
     		host1.addApplication(new AppSender(host1proto, host1, IP_ADDR2, "APP1"));
 
     		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR4, MAC_ADDR2);
     		host2.getIPLayer().addRoute(IP_ADDR3, "eth0"); // Route to R1
-    		GBNCCProtocol host2proto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, host2, "H2_GBNCC");
+    		GBNCCProtocol host2proto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, host2, IP_ADDR2, "H2_GBNCC");
     		host2.addApplication(new AppSender(host2proto, host2, IP_ADDR4, "APP2"));
     		
     		
@@ -43,8 +43,8 @@ public class Main {
     				new IPAddress[]{IP_ADDR1, IP_ADDR3}, 
     				new EthernetAddress[]{MAC_ADDR3, MAC_ADDR4});
     		
-    		GBNCCProtocol routerProto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, router, "R1_GBNCC");
-    		router.addApplication(routerProto);
+    		//GBNCCProtocol routerProto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, router, "R1_GBNCC");
+    		//router.addApplication(routerProto);
 
     		EthernetInterface h1_eth0= (EthernetInterface) host1.getInterfaceByName("eth0");
     		EthernetInterface h2_eth0= (EthernetInterface) host2.getInterfaceByName("eth0");
