@@ -1,6 +1,8 @@
 package reso.examples.gobackn;
 import reso.common.Network;
+import reso.common.Node;
 import reso.ethernet.EthernetAddress;
+import reso.examples.dv_routing.DVRoutingProtocol;
 import reso.ip.IPAddress;
 import reso.ip.IPEthernetAdapter;
 import reso.ip.IPHost;
@@ -10,8 +12,6 @@ import reso.scheduler.Scheduler;
 import reso.utilities.NetworkBuilder;
 
 public class Main {
-	
-	public static final int INITIAL_WINDOW_SIZE = 8;
 
 	public static void main(String[] args) {
 		
@@ -28,19 +28,18 @@ public class Main {
     		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 1, 1);
     		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 2);
 
-    		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR2, MAC_ADDR1);
-    		host1.getIPLayer().addRoute(IP_ADDR1, "eth0"); // Route to R1
-    		GBNCCProtocol host1proto = new GBNCCProtocol(host1, IP_ADDR4, "H1_GBNCC");
-    		host1.addApplication(new AppSender(host1proto, host1, IP_ADDR2, "APP1"));
+    		// Make host1 sending infos to host2
+    		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
+    		GBNCCProtocol host1proto = new GBNCCProtocol(host1, IP_ADDR2, "H1_GBNCC");
+    		host1.addApplication(new AppSender(host1proto, host1, "APP1"));
 
-    		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR4, MAC_ADDR2);
-    		host2.getIPLayer().addRoute(IP_ADDR3, "eth0"); // Route to R1
-    		GBNCCProtocol host2proto = new GBNCCProtocol(host2, IP_ADDR2, "H2_GBNCC");
-    		host2.addApplication(new AppSender(host2proto, host2, IP_ADDR4, "APP2"));
+    		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR2, MAC_ADDR2);
+    		GBNCCProtocol host2proto = new GBNCCProtocol(host2, IP_ADDR1, "H2_GBNCC");
+    		host2.addApplication(new AppSender(host2proto, host2, "APP2"));
     		
     		
     		IPRouter router = NetworkBuilder.createRouter(network, "R1", 
-    				new IPAddress[]{IP_ADDR1, IP_ADDR3}, 
+    				new IPAddress[]{IP_ADDR3, IP_ADDR4}, 
     				new EthernetAddress[]{MAC_ADDR3, MAC_ADDR4});
     		
     		//GBNCCProtocol routerProto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, router, "R1_GBNCC");
@@ -59,13 +58,27 @@ public class Main {
     		NetworkBuilder.createLink(host1, "eth0", router, "eth0", 5000000, 100000);
     		NetworkBuilder.createLink(router, "eth1", host2, "eth0", 5000000, 100000);
     		
-    		((IPEthernetAdapter) host1.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR1, MAC_ADDR3);
-    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR2, MAC_ADDR1);
-    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth1")).addARPEntry(IP_ADDR4, MAC_ADDR2);
-    		((IPEthernetAdapter) host2.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR3, MAC_ADDR4);
+//    		((IPEthernetAdapter) host1.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR1, MAC_ADDR3);
+//    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR2, MAC_ADDR1);
+//    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth1")).addARPEntry(IP_ADDR4, MAC_ADDR2);
+//    		((IPEthernetAdapter) host2.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR3, MAC_ADDR4);
     		
+    		// Add routing protocol application to each router
+//			for (Node n: network.getNodes()) {
+//				if (!(n instanceof IPRouter))
+//					continue;
+//				IPRouter rtr = (IPRouter) n;
+//				boolean advertise = true;
+//				router.addApplication(new DVRoutingProtocol(rtr, advertise));
+//				router.start();
+//			}
     		
+			host1.getIPLayer().addRoute(IP_ADDR2, IP_ADDR3);
+			router.getIPLayer().addRoute(IP_ADDR1, "eth0");
+			router.getIPLayer().addRoute(IP_ADDR2, "eth1");
+			host2.getIPLayer().addRoute(IP_ADDR1, IP_ADDR4);
 
+			router.start();
     		host1.start();
     		host2.start();
     		

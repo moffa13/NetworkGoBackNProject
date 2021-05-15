@@ -10,7 +10,7 @@ public class AppSender extends AbstractApplication implements Receiver {
     private final AbstractTimer _timer;
     
 
-	public AppSender(GBNCCProtocol proto, IPHost host, IPAddress dst, String name) {
+	public AppSender(GBNCCProtocol proto, IPHost host, String name) {
 		super(host, name);
 		_ppl = proto;
 		proto.setReceiver(this);
