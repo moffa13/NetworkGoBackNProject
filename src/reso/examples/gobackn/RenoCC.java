@@ -9,9 +9,10 @@ public class RenoCC {
 	private static final int MAX_DUP_ACK = 3;
 	private static final int DUP_ACK_CWND_DIVIDE = 2;
 	private int _ssthresh = 100;
+	private final GBNCCProtocol _proto;
 	
-	public RenoCC(){
-
+	public RenoCC(GBNCCProtocol proto){
+		_proto = proto;
 	}
 	
 	public void timeout(){
@@ -24,6 +25,7 @@ public class RenoCC {
 	}
 
 	public void receiveACK(int sqNb) {
+		int oldCwnd = _cwnd; 
 		if(sqNb == _lastACKSqNb){ // Duplicate ACK
 			_repeatedACK++;
 			if(_repeatedACK == MAX_DUP_ACK){ // 3 duplicate ACK
@@ -37,7 +39,7 @@ public class RenoCC {
 			
 			if(_slowStart){ 
 				_cwnd++;
-				if(_cwnd > _ssthresh){ // cwnd is now beyond the threshold
+				if(_cwnd > _ssthresh){ // cwnd is now beyond the threshold, disable SS
 					_slowStart = false;
 				}
 			}else{
@@ -46,5 +48,12 @@ public class RenoCC {
 			}
 			
 		}
+		
+		
+		// if window is smaller than before, we need to save the packets
+		if(oldCwnd > _cwnd){
+			_proto.reduceWindowSize(_cwnd, oldCwnd);
+		}
+		
 	}
 }

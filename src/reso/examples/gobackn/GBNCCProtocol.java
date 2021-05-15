@@ -38,7 +38,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	
 	public GBNCCProtocol(Host host, IPAddress dst, String name){
 		super(host, name);
-		_cc = new RenoCC();
+		_cc = new RenoCC(this);
 		_ip = ((IPHost)host).getIPLayer();
 		_queuedMessages = new LinkedList<>();
 		_dst = dst;
@@ -53,6 +53,24 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	}
 	
 	/**
+	 * Called by the congestion controller 
+	 * Resizes the window by saving the packets outside of the window's bound and storing them into the queue
+	 * @param n
+	 * @param oldN
+	 * @throws Exception
+	 */
+	public void reduceWindowSize(int n, int oldN){
+		if(_sendBase + n - 1 < _nextSeqNb){ // elements are outside now
+			for(int i = _sendBase + n; i < _sendBase + oldN; i++){ // All truncated elems
+				Message m = _window.remove(i);
+				if(m != null){
+					sendData(m); // Send them later
+				}
+			}
+		}
+	}
+	
+	/**
 	 * Sends data over ip from eth0 interface to _dst
 	 * or store it into the queue if the window is full.
 	 * @param data
@@ -64,7 +82,8 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 		if(_nextSeqNb < _sendBase + _cc.getWindowSize()){		
 			
-			_window.put(_nextSeqNb - _sendBase, packet);
+			//_window.put(_nextSeqNb - _sendBase, packet);
+			_window.put(_nextSeqNb, packet);
 			
 			sendPacket(packet);
 			
@@ -76,6 +95,11 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		}else{
 			_queuedMessages.add(packet); // Add the packet to the queue and not to the window
 		}
+	}
+	
+	private void sendData(Message m) {
+		_queuedMessages.add(m);
+		trySendPendingPackets();
 	}
 	
 	private void sendPacket(Message m){
@@ -92,6 +116,16 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		return _cc.getWindowSize() + _sendBase - _nextSeqNb >= MSSBlock;
 	}
 	
+	/**
+	 * Sends all possible waiting packets in the queue as long as the window can
+	 */
+	private void trySendPendingPackets(){
+		while(canWindowHandle(1) && !_queuedMessages.isEmpty()){ // handle the older packets first as long as the window can take packets and the queue is not empty 
+			Message packet = _queuedMessages.poll();
+			sendPacket(packet);
+		}
+	}
+	
 	
 	/**
 	 * Sends data over ip and cuts packet in smaller ones if data length is greater than MSS.
@@ -100,10 +134,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	 */
 	public void send(byte[] data) throws Exception{
 		
-		while(canWindowHandle(1) && !_queuedMessages.isEmpty()){ // handle the older packets first as long as the window can take packets and the queue is not empty 
-			Message packet = _queuedMessages.poll();
-			sendPacket(packet);
-		}
+		trySendPendingPackets();
 		
 		if(data.length > MSS){ // Data needs to be split because data > MSS
 			
