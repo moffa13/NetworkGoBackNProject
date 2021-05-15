@@ -2,19 +2,28 @@ package reso.examples.gobackn;
 import reso.common.AbstractApplication;
 import reso.common.AbstractTimer;
 import reso.ip.IPHost;
-import reso.ip.IPAddress;
 public class AppSender extends AbstractApplication implements Receiver {
 	
     private final GBNCCProtocol _ppl;
     private int _dummy = 0;
     private final AbstractTimer _timer;
+    private final MODE _mode;
+    
+    public enum MODE{
+    	RECEIVE,
+    	SEND,
+    	BOTH
+    }
     
 
-	public AppSender(GBNCCProtocol proto, IPHost host, String name) {
+	public AppSender(GBNCCProtocol proto, IPHost host, String name, MODE mode) {
 		super(host, name);
 		_ppl = proto;
+		_mode = mode;
 		proto.setReceiver(this);
-		_timer = new AbstractTimer(host.getNetwork().getScheduler(), 1, true) {
+		
+		
+		_timer = new AbstractTimer(host.getNetwork().getScheduler(), 1000, true) {
 			
 			@Override
 			protected void run() throws Exception {
@@ -27,6 +36,8 @@ public class AppSender extends AbstractApplication implements Receiver {
 			
 			}
 		};
+		
+		
 	}
 	
 	@Override
@@ -36,7 +47,7 @@ public class AppSender extends AbstractApplication implements Receiver {
 
 	@Override
 	public void start() throws Exception {
-		_timer.start();
+		if(_mode == MODE.SEND || _mode == MODE.BOTH) _timer.start();
 	}
 
 	@Override

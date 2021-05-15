@@ -1,10 +1,8 @@
 package reso.examples.gobackn;
 import reso.common.Network;
-import reso.common.Node;
 import reso.ethernet.EthernetAddress;
-import reso.examples.dv_routing.DVRoutingProtocol;
+import reso.examples.gobackn.AppSender.MODE;
 import reso.ip.IPAddress;
-import reso.ip.IPEthernetAdapter;
 import reso.ip.IPHost;
 import reso.ip.IPRouter;
 import reso.scheduler.AbstractScheduler;
@@ -23,19 +21,19 @@ public class Main {
     		final EthernetAddress MAC_ADDR2= EthernetAddress.getByAddress(0x00, 0x26, 0xbb, 0x4e, 0xfc, 0x29);
     		final EthernetAddress MAC_ADDR3= EthernetAddress.getByAddress(0x00, 0x26, 0xbb, 0x4e, 0xfc, 0x2A);
     		final EthernetAddress MAC_ADDR4= EthernetAddress.getByAddress(0x00, 0x26, 0xbb, 0x4e, 0xfc, 0x2B);
-    		final IPAddress IP_ADDR1= IPAddress.getByAddress(192, 168, 0, 1);
-    		final IPAddress IP_ADDR2= IPAddress.getByAddress(192, 168, 0, 2);
-    		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 1, 1);
-    		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 2);
+    		final IPAddress IP_ADDR1= IPAddress.getByAddress(192, 168, 0, 2);
+    		final IPAddress IP_ADDR2= IPAddress.getByAddress(192, 168, 1, 2);
+    		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 0, 1);
+    		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 1);
 
     		// Make host1 sending infos to host2
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
     		GBNCCProtocol host1proto = new GBNCCProtocol(host1, IP_ADDR2, "H1_GBNCC");
-    		host1.addApplication(new AppSender(host1proto, host1, "APP1"));
+    		host1.addApplication(new AppSender(host1proto, host1, "APP1", MODE.SEND));
 
     		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR2, MAC_ADDR2);
     		GBNCCProtocol host2proto = new GBNCCProtocol(host2, IP_ADDR1, "H2_GBNCC");
-    		host2.addApplication(new AppSender(host2proto, host2, "APP2"));
+    		host2.addApplication(new AppSender(host2proto, host2, "APP2", MODE.RECEIVE));
     		
     		
     		IPRouter router = NetworkBuilder.createRouter(network, "R1", 
@@ -74,15 +72,23 @@ public class Main {
 //			}
     		
 			host1.getIPLayer().addRoute(IP_ADDR2, IP_ADDR3);
+			host1.getIPLayer().addRoute(IP_ADDR3, "eth0");
+			
+			host2.getIPLayer().addRoute(IP_ADDR1, IP_ADDR4);
+			host2.getIPLayer().addRoute(IP_ADDR4, "eth0");
+			
 			router.getIPLayer().addRoute(IP_ADDR1, "eth0");
 			router.getIPLayer().addRoute(IP_ADDR2, "eth1");
-			host2.getIPLayer().addRoute(IP_ADDR1, IP_ADDR4);
+			
 
 			router.start();
+			host1proto.start();
+			host2proto.start();
+			host2.start();
     		host1.start();
-    		host2.start();
     		
-    		scheduler.run();
+    		
+    		scheduler.runUntil(5000.0);
     	} catch (Exception e) {
     		System.err.println(e.getMessage());
     		e.printStackTrace(System.err);

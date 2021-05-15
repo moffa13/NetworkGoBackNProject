@@ -20,8 +20,8 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private HashMap<Integer, Message> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
-	public static final int TIMER_RESEND_INTERVAL = 20;  // 20 might not be good value
-	public static final int MSS = 10;  // bytes
+	public static final int TIMER_RESEND_INTERVAL = 10000;  // 20 might not be good value
+	public static final int MSS = 20;  // bytes
 	private Message _ack = null;
 	private final IPAddress _dst;
 	private final RenoCC _cc;
@@ -80,6 +80,8 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	
 	private void sendPacket(Message m){
 		try {
+			System.out.println("Sending from " + _ip.getInterfaceByName("eth0").getAddress()
+			+ " to " + _dst);
 			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
 		} catch (Exception e) {
 			System.err.println("Can not send Packet, " + e.getMessage());
@@ -98,7 +100,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	 */
 	public void send(byte[] data) throws Exception{
 		
-		while(canWindowHandle(1) && _queuedMessages.isEmpty()){ // handle the older packets first as long as the window can take packets and the queue is not empty 
+		while(canWindowHandle(1) && !_queuedMessages.isEmpty()){ // handle the older packets first as long as the window can take packets and the queue is not empty 
 			Message packet = _queuedMessages.poll();
 			sendPacket(packet);
 		}
