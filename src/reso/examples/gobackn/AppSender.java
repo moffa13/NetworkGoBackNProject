@@ -23,10 +23,8 @@ public class AppSender extends AbstractApplication implements Receiver {
 				stb.append("Hello ");
 				stb.append(_dummy++);
 				
-				if(!_ppl.send(stb.toString().getBytes())){
-					_dummy--;
-				}
-							
+				_ppl.send(stb.toString().getBytes());
+			
 			}
 		};
 	}

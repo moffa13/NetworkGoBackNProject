@@ -1,6 +1,8 @@
 package reso.examples.gobackn;
+
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import reso.common.AbstractApplication;
 import reso.common.AbstractTimer;
 import reso.common.Host;
@@ -15,7 +17,6 @@ import reso.ip.IPLayer;
 public class GBNCCProtocol extends AbstractApplication implements IPInterfaceListener {
 	
 	private final IPLayer _ip;
-	private final int _windowSize;
 	private HashMap<Integer, Message> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
@@ -24,6 +25,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private Message _ack = null;
 	private final IPAddress _dst;
 	private final RenoCC _cc;
+	private LinkedList<Message> _queuedMessages;
 	
 	// As a receiver
 	private int _expSeqNb = 0;
@@ -34,13 +36,13 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	
 	private AbstractTimer _resendTimer;
 	
-	public GBNCCProtocol(int windowSize, Host host, IPAddress dst, String name){
+	public GBNCCProtocol(Host host, IPAddress dst, String name){
 		super(host, name);
 		_cc = new RenoCC();
 		_ip = ((IPHost)host).getIPLayer();
+		_queuedMessages = new LinkedList<>();
 		_dst = dst;
 		_window = new HashMap<>();
-		_windowSize = windowSize;
 		_resendTimer = new AbstractTimer(host.getNetwork().getScheduler(), TIMER_RESEND_INTERVAL, false) {
 			
 			@Override
@@ -50,12 +52,21 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		};
 	}
 	
+	/**
+	 * Sends data over ip from eth0 interface to _dst
+	 * or store it into the queue if the window is full.
+	 * @param data
+	 * @throws 
+	 */
 	private void sendData(byte[] data) throws Exception{
-		if(_nextSeqNb < _sendBase + _windowSize){		
-			Message packet = new GBNCCMessage(_nextSeqNb, false, data);
+		
+		Message packet = new GBNCCMessage(_nextSeqNb, false, data);
+		
+		if(_nextSeqNb < _sendBase + _cc.getWindowSize()){		
+			
 			_window.put(_nextSeqNb - _sendBase, packet);
 			
-			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, packet);
+			sendPacket(packet);
 			
 			if(_sendBase == _nextSeqNb){
 				startTimer();
@@ -63,39 +74,47 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			
 			_nextSeqNb++;
 		}else{
-			throw new RuntimeException("ERR");
+			_queuedMessages.add(packet); // Add the packet to the queue and not to the window
+		}
+	}
+	
+	private void sendPacket(Message m){
+		try {
+			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
+		} catch (Exception e) {
+			System.err.println("Can not send Packet, " + e.getMessage());
 		}
 	}
 	
 	public boolean canWindowHandle(int MSSBlock){
-		return _windowSize + _sendBase - _nextSeqNb >= MSSBlock;
+		return _cc.getWindowSize() + _sendBase - _nextSeqNb >= MSSBlock;
 	}
 	
-	public boolean send(byte[] data) throws Exception{
+	
+	/**
+	 * Sends data over ip and cuts packet in smaller ones if data length is greater than MSS.
+	 * @param data
+	 * @throws Exception
+	 */
+	public void send(byte[] data) throws Exception{
+		
+		while(canWindowHandle(1) && _queuedMessages.isEmpty()){ // handle the older packets first as long as the window can take packets and the queue is not empty 
+			Message packet = _queuedMessages.poll();
+			sendPacket(packet);
+		}
 		
 		if(data.length > MSS){ // Data needs to be split because data > MSS
 			
 			int packetN = (int)Math.ceil(((float)data.length / MSS)); // Number of packet when split in MSS
-			
-			if(!canWindowHandle(packetN)) // Sliding window can not take all the packets
-				return false;
 			
 			for(int i = 0; i < packetN; i++){
 				 byte[] packet = Arrays.copyOfRange(data, i * MSS, i * MSS + MSS); // 0 to MSS (0 to 19)  then MSS to MSS + MSS (20 to 39)
 				 sendData(packet);
 			}
 			
-			return true;
-			
-		}else{
-			if(canWindowHandle(1)){
-				sendData(data);
-				return true;
-			}	
+		}else {
+			sendData(data);
 		}
-		
-		return false;
-		
 		
 	}
 
@@ -116,15 +135,12 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 		for(int i = 0; i < _nextSeqNb; i++){
 			Message m = _window.get(i);
-			try {
-				_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
-			} catch (Exception e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+			sendPacket(m);
 		}
 		
 	}
+	
+	// todo send last packets from the queue with some sort of timer if no further data is being sent.
 
 	@Override
 	public void receive(IPInterfaceAdapter src, Datagram datagram) throws Exception {

@@ -1,11 +1,6 @@
 package reso.examples.gobackn;
-import java.util.Arrays;
-
-import reso.common.Link;
 import reso.common.Network;
 import reso.ethernet.EthernetAddress;
-import reso.ethernet.EthernetFrame;
-import reso.ethernet.EthernetInterface;
 import reso.ip.IPAddress;
 import reso.ip.IPEthernetAdapter;
 import reso.ip.IPHost;
@@ -35,12 +30,12 @@ public class Main {
 
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR2, MAC_ADDR1);
     		host1.getIPLayer().addRoute(IP_ADDR1, "eth0"); // Route to R1
-    		GBNCCProtocol host1proto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, host1, IP_ADDR4, "H1_GBNCC");
+    		GBNCCProtocol host1proto = new GBNCCProtocol(host1, IP_ADDR4, "H1_GBNCC");
     		host1.addApplication(new AppSender(host1proto, host1, IP_ADDR2, "APP1"));
 
     		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR4, MAC_ADDR2);
     		host2.getIPLayer().addRoute(IP_ADDR3, "eth0"); // Route to R1
-    		GBNCCProtocol host2proto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, host2, IP_ADDR2, "H2_GBNCC");
+    		GBNCCProtocol host2proto = new GBNCCProtocol(host2, IP_ADDR2, "H2_GBNCC");
     		host2.addApplication(new AppSender(host2proto, host2, IP_ADDR4, "APP2"));
     		
     		
