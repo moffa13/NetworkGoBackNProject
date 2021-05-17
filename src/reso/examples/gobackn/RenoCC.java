@@ -51,9 +51,13 @@ public class RenoCC {
 		
 		
 		// if window is smaller than before, we need to save the packets
-		if(oldCwnd > _cwnd){
-			_proto.reduceWindowSize(_cwnd, oldCwnd);
+		if(oldCwnd != _cwnd) {
+			System.out.println("Cwnd " + oldCwnd + " => " + _cwnd);
+			if(oldCwnd > _cwnd){
+				_proto.reduceWindowSize(_cwnd, oldCwnd);
+			}
 		}
+		
 		
 	}
 }
