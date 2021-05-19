@@ -25,7 +25,7 @@ public class Main {
     		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 0, 1);
     		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 1);
     		
-    		int packetsToSend = 10000;
+    		int packetsToSend = 100;
 
     		// Make host1 sending infos to host2
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
@@ -85,7 +85,7 @@ public class Main {
     		host1.start();
     		
     		
-    		scheduler.run();
+    		scheduler.runUntil(1000);
     	} catch (Exception e) {
     		System.err.println(e.getMessage());
     		e.printStackTrace(System.err);

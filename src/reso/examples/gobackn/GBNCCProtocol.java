@@ -30,9 +30,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private HashMap<Integer, GBNCCMessage> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
-	public static final int TIMER_RESEND_INTERVAL = 2;
-	public static final double PACKET_DROP_PERCENTAGE = 0.01;
-	public static final int MAX_PACKET_DROPS = 1;
+	public static final int TIMER_RESEND_INTERVAL = 1;
+	public static final double PACKET_DROP_PERCENTAGE = 0.05;
+	public static final int MAX_PACKET_DROPS = 10;
 	public static final int MSS = 10;  // bytes
 	private GBNCCMessage _ack = null;
 	private final IPAddress _dst;
@@ -65,7 +65,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	}
 	
 	/**
-	 * Sends data over ip from eth0 interface to _dst
+	 * Sends data over ip
 	 * or store it into the queue if the window is full.
 	 * @param data
 	 * @throws 
@@ -92,16 +92,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	}
 	
 	/**
-	 * Sends the packet stored at i position in the window
-	 * @param i
+	 * Sends a packet over ip (already containing a sequence number)
+	 * @param m
 	 */
-	public void sendPacket(int i){
-		Message m = _window.get(i);
-		if(m != null){
-			sendPacket(m);
-		}
-	}
-	
 	private void sendPacket(Message m){
 		try {
 			log(false, SENDER.SENDER, "Sending packet with seqNb = " + ((GBNCCMessage)m)._seqNb);
@@ -111,6 +104,12 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		}
 	}
 	
+	/**
+	 * Check if the window contains at least MSSBlock packets of MSS size free.
+	 * This is used to check if a packet can be added to the window.
+	 * @param MSSBlock
+	 * @return
+	 */
 	public boolean canWindowHandle(int MSSBlock){
 		return _cc.getWindowSize() + _sendBase - _nextSeqNb >= MSSBlock;
 	}
@@ -156,29 +155,36 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 	}
 
-	private void startTimer() {
+	public void startTimer() {
 		log(false, SENDER.BOTH, "START TIMER");
 		stopTimer();
 		_resendTimer = new AbstractTimer(host.getNetwork().getScheduler(), TIMER_RESEND_INTERVAL, true) {
 			
 			@Override
 			protected void run() throws Exception {
-				timeout();
+				timeout(true);
 			}
 		};
 		_resendTimer.start();
 	}
 	
-	private void stopTimer() {
+	public void stopTimer() {
 		if(_resendTimer != null) _resendTimer.stop();
 	}
 	
-	private void timeout() {
+	/**
+	 * 
+	 * @param realTimeout true if the timeout function is triggered by a real timeout, false if it is called for a fast retransmit.
+	 */
+	public void timeout(boolean realTimeout) {
 			
-		log(true, SENDER.SENDER, "Timeout detected..");
-		
-		_cc.timeout();
-		
+		if(realTimeout){
+			log(true, SENDER.SENDER, "Timeout detected..");
+			_cc.timeout();
+		}
+			
+		// As the window can be shrinked, always check if _nextSeqNb is not outside,
+		// If yes, resend only all the packets in the window and not outside
 		int min = Math.min(_nextSeqNb, _sendBase + _cc.getWindowSize());
 				
 		for(int i = _sendBase; i < min; i++){
@@ -188,16 +194,25 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 	}
 	
+	/**
+	 * Logs the specified message
+	 * @param error Is it an error message ?
+	 * @param sender Whether it is being logged from the sender or the receiver
+	 * @param message
+	 */
 	public void log(boolean error, SENDER sender, String message){
 		StringBuilder stb = new StringBuilder();
+		
+		stb.append("[");
+		stb.append((int)(getHost().getNetwork().getScheduler().getCurrentTime() * 1000));
+		stb.append("ms] ");
+		
 		if(sender == SENDER.SENDER){
 			stb.append("SENDER : ");
 		}else if(sender == SENDER.RECEIVER){
 			stb.append("RECEIVER : ");
 		}
-		stb.append("[");
-		stb.append((int)(getHost().getNetwork().getScheduler().getCurrentTime() * 1000));
-		stb.append("ms] ");
+		
 		stb.append(message);
 		
 		synchronized (System.out) {
@@ -213,17 +228,16 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 		GBNCCMessage pck = (GBNCCMessage)datagram.getPayload();
 		
-		double d = Math.random();
 		// Simulate packet drop
+		double d = Math.random();
 		if(_currentDrops < MAX_PACKET_DROPS && d < PACKET_DROP_PERCENTAGE){
 			log(true, SENDER.BOTH, "Faking a packet drop ... (seqNb=" + pck._seqNb + ", isAck=" + pck.isACK() + ")");
 			_currentDrops++;
 			return;
 		}
 		
-		
-		
-		if(pck._checksum == pck.getChecksum()){ // Not corrupted
+		// Not corrupted
+		if(pck._checksum == pck.getChecksum()){ 
 			if(pck.isACK()){ // ACK Packet is received from receiver
 				
 				log(false, SENDER.SENDER, pck._seqNb + " ACK'ed");

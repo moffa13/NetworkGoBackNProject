@@ -18,53 +18,49 @@ public class RenoCC {
 	}
 	
 	public void timeout(){
-		_proto.log(false, SENDER.BOTH, "slow start on");
-		_proto.log(false, SENDER.BOTH, "Cwnd " + _cwnd + " => " + 1);
-		_cwnd = 1;
+		_proto.log(false, SENDER.BOTH, "Slow start on");
+		setWindowSize(1.0f);
 		_slowStart = true;
 	}
 	
 	public int getWindowSize(){
 		return (int)_cwnd;
 	}
+	
+	public void setWindowSize(float size){
+		if(getWindowSize() != (int)size){
+			_proto.log(false, SENDER.BOTH, "Cwnd " + getWindowSize() + " => " + (int)(size));
+		}
+		_cwnd = size;
+	}
 
-	public void receiveACK(int sqNb) {
-		int oldCwnd = getWindowSize(); 
-		
+	public void receiveACK(int sqNb) {		
 		if(sqNb == _lastACKSqNb){ // Duplicate ACK
 			_repeatedACK++;
-			if(_repeatedACK >= MAX_DUP_ACK){ // 3 duplicate ACK
+			if(_repeatedACK == MAX_DUP_ACK){ // 3 duplicate ACK exactly
 				_proto.log(true, SENDER.RECEIVER, "3 duplicate ACK (" + sqNb + ")");
-				_proto.sendPacket(sqNb + 1);
-				_cwnd /= DUP_ACK_CWND_DIVIDE; // Divide cwnd by 2
+				setWindowSize(_cwnd / (float)DUP_ACK_CWND_DIVIDE); // Divide cwnd by 2
 				if(_cwnd < 1.0f) _cwnd = 1;
 				_ssthresh = _cwnd; // threshold equals to half of the congestion window when loss occurs.
+				
+				_proto.stopTimer();
+				_proto.timeout(false);				
 			}
 		}else{ // Different ACK
 			_lastACKSqNb = sqNb;
 			_repeatedACK = 1;
 			
 			if(_slowStart){ 
-				_cwnd++;
+				setWindowSize(_cwnd + 1);
 				if(_cwnd > _ssthresh){ // cwnd is now beyond the threshold, disable SS
 					_slowStart = false;
-					_proto.log(false, SENDER.BOTH, "slow start off");
+					_proto.log(false, SENDER.BOTH, "Slow start off");
 				}
 			}else{
 				// cwnd + (MSS^2 / cwnd)
-				_cwnd = (_cwnd + (float)(Math.pow(GBNCCProtocol.MSS, 2) / _cwnd));
+				setWindowSize((_cwnd + (float)(Math.pow(GBNCCProtocol.MSS, 2) / _cwnd)));
 			}
 			
-		}
-		
-		_proto.log(false, SENDER.BOTH, "Cwnd " + oldCwnd + " => " + _cwnd);
-
-		if(oldCwnd != getWindowSize()) {
-			if(oldCwnd > getWindowSize()){
-				_proto.log(false, SENDER.SENDER, "Resizing sliding window");
-			}
-		}
-		
-		
+		}		
 	}
 }
