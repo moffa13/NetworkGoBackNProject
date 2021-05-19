@@ -32,7 +32,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
 	public static final int TIMER_RESEND_INTERVAL = 2;
 	public static final double PACKET_DROP_PERCENTAGE = 0.01;
-	public static final int MAX_PACKET_DROPS = 50;
+	public static final int MAX_PACKET_DROPS = 1;
 	public static final int MSS = 10;  // bytes
 	private GBNCCMessage _ack = null;
 	private final IPAddress _dst;
@@ -40,7 +40,6 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private LinkedList<RawChunkMessage> _queuedMessages;
 	private ArrayList<Byte> _receivedBytes;
 	private int _currentDrops = 0;
-	private boolean _allowTimer = false;
 	
 	// As a receiver
 	private int _expSeqNb = 0;
@@ -59,14 +58,6 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		_dst = dst;
 		_window = new HashMap<>();
 		_receivedBytes = new ArrayList<>();
-		_resendTimer = new AbstractTimer(host.getNetwork().getScheduler(), TIMER_RESEND_INTERVAL, true) {
-			
-			@Override
-			protected void run() throws Exception {
-				timeout();				
-			}
-		};
-		
 	}
 	
 	private void sendData(byte[] data) throws Exception{
@@ -100,10 +91,19 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		}
 	}
 	
+	/**
+	 * Sends the packet stored at i position in the window
+	 * @param i
+	 */
+	public void sendPacket(int i){
+		Message m = _window.get(i);
+		if(m != null){
+			sendPacket(m);
+		}
+	}
+	
 	private void sendPacket(Message m){
 		try {
-//			System.out.println("Sending from " + _ip.getInterfaceByName("eth0").getAddress()
-//			+ " to " + _dst);
 			log(false, SENDER.SENDER, "Sending packet with seqNb = " + ((GBNCCMessage)m)._seqNb);
 			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
 		} catch (Exception e) {
@@ -157,22 +157,27 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	}
 
 	private void startTimer() {
-		_allowTimer = true;
+		log(false, SENDER.BOTH, "START TIMER");
+		stopTimer();
+		_resendTimer = new AbstractTimer(host.getNetwork().getScheduler(), TIMER_RESEND_INTERVAL, true) {
+			
+			@Override
+			protected void run() throws Exception {
+				timeout();
+			}
+		};
+		_resendTimer.start();
 	}
 	
 	private void stopTimer() {
-		_allowTimer = false;
+		if(_resendTimer != null) _resendTimer.stop();
 	}
 	
 	private void timeout() {
-		
-		if(!_allowTimer) return;
-		
+			
 		log(true, SENDER.SENDER, "Timeout detected..");
 		
 		_cc.timeout();
-		
-		startTimer();
 		
 		int min = Math.min(_nextSeqNb, _sendBase + _cc.getWindowSize());
 				
@@ -183,7 +188,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 	}
 	
-	private void log(boolean error, SENDER sender, String message){
+	public void log(boolean error, SENDER sender, String message){
 		StringBuilder stb = new StringBuilder();
 		if(sender == SENDER.SENDER){
 			stb.append("SENDER : ");
@@ -284,13 +289,11 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	@Override
 	public void start() throws Exception {
 		_ip.addListener(GBNCC_PROTOCOL, this);
-		_resendTimer.start();	
 	}
 
 	@Override
 	public void stop() {
 		stopTimer();
-		_resendTimer.stop();
 		_ip.removeListener(GBNCC_PROTOCOL, this);
 		_window.clear();
 		_expSeqNb = 0;

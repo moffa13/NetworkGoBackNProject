@@ -1,36 +1,43 @@
 package reso.examples.gobackn;
 
+import reso.examples.gobackn.GBNCCProtocol.SENDER;
+
 public class RenoCC {
 	
-	private int _cwnd = 1;
+	private float _cwnd = 1.0f;
 	private boolean _slowStart = true;
 	private int _lastACKSqNb = -1;
 	private int _repeatedACK = 1;
 	private static final int MAX_DUP_ACK = 3;
 	private static final int DUP_ACK_CWND_DIVIDE = 2;
-	private int _ssthresh = 100;
+	private float _ssthresh = 100;
+	private final GBNCCProtocol _proto;
 	
-	public RenoCC(GBNCCProtocol proto){}
+	public RenoCC(GBNCCProtocol proto){
+		_proto = proto;
+	}
 	
 	public void timeout(){
-		System.out.println("slow start on");
-		System.out.println("Cwnd " + _cwnd + " => " + 1);
+		_proto.log(false, SENDER.BOTH, "slow start on");
+		_proto.log(false, SENDER.BOTH, "Cwnd " + _cwnd + " => " + 1);
 		_cwnd = 1;
 		_slowStart = true;
 	}
 	
 	public int getWindowSize(){
-		return _cwnd;
+		return (int)_cwnd;
 	}
 
 	public void receiveACK(int sqNb) {
-		int oldCwnd = _cwnd; 
+		int oldCwnd = getWindowSize(); 
+		
 		if(sqNb == _lastACKSqNb){ // Duplicate ACK
 			_repeatedACK++;
 			if(_repeatedACK >= MAX_DUP_ACK){ // 3 duplicate ACK
-				System.out.println("3 duplicate ACK");
+				_proto.log(true, SENDER.RECEIVER, "3 duplicate ACK (" + sqNb + ")");
+				_proto.sendPacket(sqNb + 1);
 				_cwnd /= DUP_ACK_CWND_DIVIDE; // Divide cwnd by 2
-				if(_cwnd == 0) _cwnd = 1;
+				if(_cwnd < 1.0f) _cwnd = 1;
 				_ssthresh = _cwnd; // threshold equals to half of the congestion window when loss occurs.
 			}
 		}else{ // Different ACK
@@ -41,21 +48,20 @@ public class RenoCC {
 				_cwnd++;
 				if(_cwnd > _ssthresh){ // cwnd is now beyond the threshold, disable SS
 					_slowStart = false;
-					System.out.println("Slow start off");
+					_proto.log(false, SENDER.BOTH, "slow start off");
 				}
 			}else{
 				// cwnd + (MSS^2 / cwnd)
-				_cwnd = (int)(_cwnd + (Math.pow(GBNCCProtocol.MSS, 2) / _cwnd));
+				_cwnd = (_cwnd + (float)(Math.pow(GBNCCProtocol.MSS, 2) / _cwnd));
 			}
 			
 		}
 		
-		
-		// if window is smaller than before, we need to save the packets
-		if(oldCwnd != _cwnd) {
-			System.out.println("Cwnd " + oldCwnd + " => " + _cwnd);
-			if(oldCwnd > _cwnd){
-				System.out.println("Resizing sliding window");
+		_proto.log(false, SENDER.BOTH, "Cwnd " + oldCwnd + " => " + _cwnd);
+
+		if(oldCwnd != getWindowSize()) {
+			if(oldCwnd > getWindowSize()){
+				_proto.log(false, SENDER.SENDER, "Resizing sliding window");
 			}
 		}
 		
