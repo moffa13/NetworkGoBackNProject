@@ -31,7 +31,7 @@ public class Main {
     		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 0, 1);
     		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 1);
     		
-    		int packetsToSend = 10000;
+    		int packetsToSend = 1000;
 
     		// Make host1 sending infos to host2
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
@@ -64,37 +64,9 @@ public class Main {
     		IPRouter router = NetworkBuilder.createRouter(network, "R1", 
     				new IPAddress[]{IP_ADDR3, IP_ADDR4}, 
     				new EthernetAddress[]{MAC_ADDR3, MAC_ADDR4});
-    		
-    		//GBNCCProtocol routerProto = new GBNCCProtocol(INITIAL_WINDOW_SIZE, router, "R1_GBNCC");
-    		//router.addApplication(routerProto);
-
-//    		EthernetInterface h1_eth0= (EthernetInterface) host1.getInterfaceByName("eth0");
-//    		EthernetInterface h2_eth0= (EthernetInterface) host2.getInterfaceByName("eth0");
-//    		EthernetInterface r1_eth0= (EthernetInterface) router.getInterfaceByName("eth0");
-//    		EthernetInterface r1_eth1= (EthernetInterface) router.getInterfaceByName("eth1");
-//    		
-    		
-    		// Connect both interfaces h1 to r1 and r1 to h2 with a 5000km long link
-    		//new Link<EthernetFrame>(h1_eth0, r1_eth0, 5000000, 100000);
-    		//new Link<EthernetFrame>(r1_eth1, h2_eth0, 5000000, 100000);
 
     		NetworkBuilder.createLink(host1, "eth0", router, "eth0", 5000000, 100000);
     		NetworkBuilder.createLink(router, "eth1", host2, "eth0", 5000000, 100000);
-    		
-//    		((IPEthernetAdapter) host1.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR1, MAC_ADDR3);
-//    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR2, MAC_ADDR1);
-//    		((IPEthernetAdapter) router.getIPLayer().getInterfaceByName("eth1")).addARPEntry(IP_ADDR4, MAC_ADDR2);
-//    		((IPEthernetAdapter) host2.getIPLayer().getInterfaceByName("eth0")).addARPEntry(IP_ADDR3, MAC_ADDR4);
-    		
-    		// Add routing protocol application to each router
-//			for (Node n: network.getNodes()) {
-//				if (!(n instanceof IPRouter))
-//					continue;
-//				IPRouter rtr = (IPRouter) n;
-//				boolean advertise = true;
-//				router.addApplication(new DVRoutingProtocol(rtr, advertise));
-//				router.start();
-//			}
     		
 			host1.getIPLayer().addRoute(IP_ADDR2, IP_ADDR3);
 			host1.getIPLayer().addRoute(IP_ADDR3, "eth0");

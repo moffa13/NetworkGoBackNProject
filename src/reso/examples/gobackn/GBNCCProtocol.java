@@ -256,6 +256,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 				}else{
 					startTimer();
 				}
+				
+				trySendPendingPackets();
+				
 			}else{ // Data is received from the sender (we are receiver in that case)
 				
 				if(_expSeqNb == pck._seqNb){ 
@@ -276,7 +279,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 					
 				}else {
 					log(true, SENDER.RECEIVER, "Received wrong packet (seqNb=" + pck._seqNb + ", expectedSeqNb=" + _expSeqNb + ")");
-					trySendACK(true, SENDER.RECEIVER);
+					trySendACK(false, SENDER.RECEIVER);
 				}
 			}
 		}else{
@@ -284,7 +287,6 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			trySendACK(true, SENDER.BOTH);
 		}
 		
-		trySendPendingPackets();
 	}
 	
 	private void sendtoReceiver() {
