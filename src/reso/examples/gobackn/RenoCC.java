@@ -9,13 +9,12 @@ public class RenoCC {
 	private static final int MAX_DUP_ACK = 3;
 	private static final int DUP_ACK_CWND_DIVIDE = 2;
 	private int _ssthresh = 100;
-	private final GBNCCProtocol _proto;
 	
-	public RenoCC(GBNCCProtocol proto){
-		_proto = proto;
-	}
+	public RenoCC(GBNCCProtocol proto){}
 	
 	public void timeout(){
+		System.out.println("Time out, slow start on");
+		System.out.println("Cwnd " + _cwnd + " => " + 1);
 		_cwnd = 1;
 		_slowStart = true;
 	}
@@ -29,6 +28,7 @@ public class RenoCC {
 		if(sqNb == _lastACKSqNb){ // Duplicate ACK
 			_repeatedACK++;
 			if(_repeatedACK == MAX_DUP_ACK){ // 3 duplicate ACK
+				System.out.println("3 duplicate ACK");
 				_cwnd /= DUP_ACK_CWND_DIVIDE; // Divide cwnd by 2
 				if(_cwnd == 0) _cwnd = 1;
 				_ssthresh = _cwnd; // threshold equals to half of the congestion window when loss occurs.
@@ -41,6 +41,7 @@ public class RenoCC {
 				_cwnd++;
 				if(_cwnd > _ssthresh){ // cwnd is now beyond the threshold, disable SS
 					_slowStart = false;
+					System.out.println("Slow start off");
 				}
 			}else{
 				// cwnd + (MSS^2 / cwnd)
@@ -54,7 +55,7 @@ public class RenoCC {
 		if(oldCwnd != _cwnd) {
 			System.out.println("Cwnd " + oldCwnd + " => " + _cwnd);
 			if(oldCwnd > _cwnd){
-				_proto.reduceWindowSize(_cwnd, oldCwnd);
+				System.out.println("Resizing sliding window");
 			}
 		}
 		

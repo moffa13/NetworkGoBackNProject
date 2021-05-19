@@ -1,7 +1,6 @@
 package reso.examples.gobackn;
 import reso.common.Network;
 import reso.ethernet.EthernetAddress;
-import reso.examples.gobackn.AppSender.MODE;
 import reso.ip.IPAddress;
 import reso.ip.IPHost;
 import reso.ip.IPRouter;
@@ -25,15 +24,15 @@ public class Main {
     		final IPAddress IP_ADDR2= IPAddress.getByAddress(192, 168, 1, 2);
     		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 0, 1);
     		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 1);
+    		
+    		int packetsToSend = 10;
 
     		// Make host1 sending infos to host2
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
-    		GBNCCProtocol host1proto = new GBNCCProtocol(host1, IP_ADDR2, "H1_GBNCC");
-    		host1.addApplication(new AppSender(host1proto, host1, "APP1", MODE.SEND));
+    		host1.addApplication(new AppSender(host1, IP_ADDR2, "APP1", packetsToSend));
 
     		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR2, MAC_ADDR2);
-    		GBNCCProtocol host2proto = new GBNCCProtocol(host2, IP_ADDR1, "H2_GBNCC");
-    		host2.addApplication(new AppSender(host2proto, host2, "APP2", MODE.RECEIVE));
+    		host2.addApplication(new AppReceiver(host2, IP_ADDR1, "APP2", packetsToSend));
     		
     		
     		IPRouter router = NetworkBuilder.createRouter(network, "R1", 
@@ -82,13 +81,11 @@ public class Main {
 			
 
 			router.start();
-			host1proto.start();
-			host2proto.start();
 			host2.start();
     		host1.start();
     		
     		
-    		scheduler.runUntil(5000.0);
+    		scheduler.run();
     	} catch (Exception e) {
     		System.err.println(e.getMessage());
     		e.printStackTrace(System.err);

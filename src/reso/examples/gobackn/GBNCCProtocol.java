@@ -24,8 +24,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private HashMap<Integer, GBNCCMessage> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
-	public static final int TIMER_RESEND_INTERVAL = 10000;  // 20 might not be good value
-	public static final int MSS = 2;  // bytes
+	public static final int TIMER_RESEND_INTERVAL = 2;
+	public static final double PACKET_DROP_PERCENTAGE = 0.01;
+	public static final int MSS = 10;  // bytes
 	private GBNCCMessage _ack = null;
 	private final IPAddress _dst;
 	private final RenoCC _cc;
@@ -58,24 +59,6 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		};
 	}
 	
-	/**
-	 * Called by the congestion controller 
-	 * Resizes the window by saving the packets outside of the window's bound and storing them into the queue
-	 * @param n the new congestion window size
-	 * @param oldN the old congestion window size
-	 * @throws Exception
-	 */
-	public void reduceWindowSize(int n, int oldN){
-		if(_sendBase + n - 1 < _nextSeqNb){ // elements are outside now
-			for(int i = _sendBase + n; i < _sendBase + oldN; i++){ // All truncated elems
-				GBNCCMessage m = _window.remove(i);
-				if(m != null){
-					_queuedMessages.add(new RawChunkMessage(m._data, m.isLastMessage()));
-				}
-			}
-		}
-	}
-	
 	private void sendData(byte[] data) throws Exception{
 		sendData(data, true);
 	}
@@ -92,8 +75,13 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			
 			GBNCCMessage packet = new GBNCCMessage(_nextSeqNb, false, data, lastMessage);
 			
+			System.out.println("SENDING " + _nextSeqNb);
+			
+			
 			//_window.put(_nextSeqNb - _sendBase, packet);
 			_window.put(_nextSeqNb, packet);
+			
+			
 			
 			sendPacket(packet);
 			
@@ -102,15 +90,11 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			}
 			
 			_nextSeqNb++;
+			
 		}else{
 			_queuedMessages.add(new RawChunkMessage(data, lastMessage)); // Add the packet to the queue and not to the window
 		}
 	}
-	
-//	private void sendData(Message m) {
-//		_queuedMessages.add(m);
-//		trySendPendingPackets();
-//	}
 	
 	private void sendPacket(Message m){
 		try {
@@ -178,34 +162,47 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	
 	private void timeout() {
 		
-		startTimer();
-		
 		_cc.timeout();
 		
-		for(int i = 0; i < _nextSeqNb; i++){
+		startTimer();
+		
+		int min = Math.min(_nextSeqNb, _sendBase + _cc.getWindowSize());
+				
+		for(int i = _sendBase; i < min; i++){
 			Message m = _window.get(i);
 			sendPacket(m);
 		}
 		
 	}
-	
-	// todo send last packets from the queue with some sort of timer if no further data is being sent.
 
 	@Override
 	public void receive(IPInterfaceAdapter src, Datagram datagram) throws Exception {
+		
+		
+		
+		double d = Math.random();
+		// Simulate packet drop
+		if(d < PACKET_DROP_PERCENTAGE)
+			return;
+		System.out.println("RECV");
 		
 		GBNCCMessage pck = (GBNCCMessage)datagram.getPayload();
 		
 		if(pck._checksum == pck.getChecksum()){ // Not corrupted
 			if(pck.isACK()){ // ACK Packet is received from receiver
+				
+				System.out.println(pck._seqNb + " ACK'ed");
+
 				_cc.receiveACK(pck._seqNb);
 				_sendBase = pck._seqNb + 1;
+
 				if(_sendBase == _nextSeqNb){
 					stopTimer();
 				}else{
 					startTimer();
 				}
 			}else{ // Data is received from the sender (we are receiver in that case)
+				
 				if(_expSeqNb == pck._seqNb){ 
 					
 					byte[] data = pck._data;
@@ -228,6 +225,8 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			System.out.println("CORRUPTED GBNCC Packet");
 			trySendACK();
 		}
+		
+		trySendPendingPackets();
 	}
 	
 	private void sendtoReceiver() {
