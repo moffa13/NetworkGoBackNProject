@@ -38,7 +38,7 @@ public class RenoCC {
 		if(sqNb == _lastACKSqNb){ // Duplicate ACK
 			_repeatedACK++;
 			if(_repeatedACK == MAX_DUP_ACK){ // 3 duplicate ACK exactly
-				_proto.log(true, SENDER.RECEIVER, "3 duplicate ACK (" + sqNb + ")");
+				_proto.log(true, SENDER.SENDER, "3 duplicate ACK (" + sqNb + ")");
 				setWindowSize(_cwnd / (float)DUP_ACK_CWND_DIVIDE); // Divide cwnd by 2
 				if(_cwnd < 1.0f) _cwnd = 1;
 				_ssthresh = _cwnd; // threshold equals to half of the congestion window when loss occurs.

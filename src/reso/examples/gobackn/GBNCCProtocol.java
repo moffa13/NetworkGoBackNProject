@@ -30,9 +30,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private HashMap<Integer, GBNCCMessage> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
-	public static final int TIMER_RESEND_INTERVAL = 1;
+	public static final int TIMER_RESEND_INTERVAL = 5;
 	public static final double PACKET_DROP_PERCENTAGE = 0.01;
-	public static final int MAX_PACKET_DROPS = 10;
+	public static final int MAX_PACKET_DROPS = 1;
 	public static final int MSS = 10;  // bytes
 	private GBNCCMessage _ack = null;
 	private final IPAddress _dst;
@@ -100,7 +100,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			log(false, SENDER.SENDER, "Sending packet with seqNb = " + ((GBNCCMessage)m)._seqNb);
 			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
 		} catch (Exception e) {
-			System.err.println("Can not send Packet, " + e.getMessage());
+			log(true, SENDER.BOTH, "Can not send Packet, " + e.getMessage());
 		}
 	}
 	
@@ -121,6 +121,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		while(canWindowHandle(1) && !_queuedMessages.isEmpty()){ // handle the older packets first as long as the window can take packets and the queue is not empty 
 			RawChunkMessage packet = _queuedMessages.poll();
 			try {
+				log(false, SENDER.SENDER, "Trying to send queued message");
 				sendData(packet._data, packet._lastMessage);
 			} catch (Exception e) {
 				// TODO Auto-generated catch block
@@ -144,9 +145,16 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			int packetN = (int)Math.ceil(((float)data.length / MSS)); // Number of packet when split in MSS
 			
 			for(int i = 0; i < packetN; i++){
-				 byte[] packet = Arrays.copyOfRange(data, i * MSS, i * MSS + MSS); // 0 to MSS (0 to 19)  then MSS to MSS + MSS (20 to 39)
-				 boolean lastMessage = i == packetN - 1;
-				 sendData(packet, lastMessage);
+				if(i == packetN - 1) {
+					int remaining = data.length - i * MSS;
+					byte[] packet = Arrays.copyOfRange(data, i * MSS, i * MSS + remaining); // 0 to MSS (0 to 19)  then MSS to MSS + MSS (20 to 39)
+					sendData(packet, true);
+				}else {
+					
+					byte[] packet = Arrays.copyOfRange(data, i * MSS, i * MSS + MSS); // 0 to MSS (0 to 19)  then MSS to MSS + MSS (20 to 39)
+					sendData(packet, false);
+				}
+				
 			}
 			
 		}else {
@@ -206,11 +214,17 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	 * @param message
 	 */
 	public void log(boolean error, SENDER sender, String message){
+				
 		StringBuilder stb = new StringBuilder();
 		
 		stb.append("[");
 		stb.append((int)(getHost().getNetwork().getScheduler().getCurrentTime() * 1000));
 		stb.append("ms] ");
+		
+		if(error)
+			stb.append("[ERROR] ");
+		else
+			stb.append("[INFO] ");
 		
 		if(sender == SENDER.SENDER){
 			stb.append("SENDER : ");
@@ -219,13 +233,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		}
 		
 		stb.append(message);
+	
+		System.out.println(stb.toString());
 		
-		synchronized (System.out) {
-			if(error)
-				System.err.println(stb.toString());
-			else
-				System.out.println(stb.toString());
-		}
 	}
 
 	@Override
@@ -245,19 +255,23 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		if(pck._checksum == pck.getChecksum()){ 
 			if(pck.isACK()){ // ACK Packet is received from receiver
 				
-				log(false, SENDER.SENDER, pck._seqNb + " ACK'ed");
+				
+				if(pck._seqNb >= _sendBase) {
+					log(false, SENDER.SENDER, pck._seqNb + " ACK'ed");
 
-				_cc.receiveACK(pck._seqNb);
-				_window.remove(pck._seqNb); // Remove the received packet from the window
-				_sendBase = pck._seqNb + 1;
+					_cc.receiveACK(pck._seqNb);
+					_window.remove(pck._seqNb); // Remove the received packet from the window
+					_sendBase = pck._seqNb + 1;
 
-				if(_sendBase == _nextSeqNb){
-					stopTimer();
-				}else{
-					startTimer();
+					if(_sendBase == _nextSeqNb){
+						stopTimer();
+					}else{
+						startTimer();
+					}
+					
+					trySendPendingPackets();
 				}
 				
-				trySendPendingPackets();
 				
 			}else{ // Data is received from the sender (we are receiver in that case)
 				
