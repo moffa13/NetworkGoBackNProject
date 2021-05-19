@@ -20,18 +20,27 @@ import reso.ip.IPLayer;
 
 public class GBNCCProtocol extends AbstractApplication implements IPInterfaceListener {
 	
+	public enum SENDER{
+		SENDER,
+		RECEIVER,
+		BOTH
+	}
+	
 	private final IPLayer _ip;
 	private HashMap<Integer, GBNCCMessage> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
 	public static final int TIMER_RESEND_INTERVAL = 2;
 	public static final double PACKET_DROP_PERCENTAGE = 0.01;
+	public static final int MAX_PACKET_DROPS = 50;
 	public static final int MSS = 10;  // bytes
 	private GBNCCMessage _ack = null;
 	private final IPAddress _dst;
 	private final RenoCC _cc;
 	private LinkedList<RawChunkMessage> _queuedMessages;
 	private ArrayList<Byte> _receivedBytes;
+	private int _currentDrops = 0;
+	private boolean _allowTimer = false;
 	
 	// As a receiver
 	private int _expSeqNb = 0;
@@ -50,13 +59,14 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		_dst = dst;
 		_window = new HashMap<>();
 		_receivedBytes = new ArrayList<>();
-		_resendTimer = new AbstractTimer(host.getNetwork().getScheduler(), TIMER_RESEND_INTERVAL, false) {
+		_resendTimer = new AbstractTimer(host.getNetwork().getScheduler(), TIMER_RESEND_INTERVAL, true) {
 			
 			@Override
 			protected void run() throws Exception {
 				timeout();				
 			}
 		};
+		
 	}
 	
 	private void sendData(byte[] data) throws Exception{
@@ -74,15 +84,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		if(_nextSeqNb < _sendBase + _cc.getWindowSize()){		
 			
 			GBNCCMessage packet = new GBNCCMessage(_nextSeqNb, false, data, lastMessage);
-			
-			System.out.println("SENDING " + _nextSeqNb);
-			
-			
-			//_window.put(_nextSeqNb - _sendBase, packet);
+
 			_window.put(_nextSeqNb, packet);
-			
-			
-			
+
 			sendPacket(packet);
 			
 			if(_sendBase == _nextSeqNb){
@@ -98,8 +102,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	
 	private void sendPacket(Message m){
 		try {
-			System.out.println("Sending from " + _ip.getInterfaceByName("eth0").getAddress()
-			+ " to " + _dst);
+//			System.out.println("Sending from " + _ip.getInterfaceByName("eth0").getAddress()
+//			+ " to " + _dst);
+			log(false, SENDER.SENDER, "Sending packet with seqNb = " + ((GBNCCMessage)m)._seqNb);
 			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
 		} catch (Exception e) {
 			System.err.println("Can not send Packet, " + e.getMessage());
@@ -152,15 +157,18 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	}
 
 	private void startTimer() {
-		if(_resendTimer.isRunning()) stopTimer();
-		_resendTimer.start();		
+		_allowTimer = true;
 	}
 	
 	private void stopTimer() {
-		_resendTimer.stop();
+		_allowTimer = false;
 	}
 	
 	private void timeout() {
+		
+		if(!_allowTimer) return;
+		
+		log(true, SENDER.SENDER, "Timeout detected..");
 		
 		_cc.timeout();
 		
@@ -174,26 +182,49 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		}
 		
 	}
+	
+	private void log(boolean error, SENDER sender, String message){
+		StringBuilder stb = new StringBuilder();
+		if(sender == SENDER.SENDER){
+			stb.append("SENDER : ");
+		}else if(sender == SENDER.RECEIVER){
+			stb.append("RECEIVER : ");
+		}
+		stb.append("[");
+		stb.append((int)(getHost().getNetwork().getScheduler().getCurrentTime() * 1000));
+		stb.append("ms] ");
+		stb.append(message);
+		
+		synchronized (System.out) {
+			if(error)
+				System.err.println(stb.toString());
+			else
+				System.out.println(stb.toString());
+		}
+	}
 
 	@Override
 	public void receive(IPInterfaceAdapter src, Datagram datagram) throws Exception {
 		
-		
+		GBNCCMessage pck = (GBNCCMessage)datagram.getPayload();
 		
 		double d = Math.random();
 		// Simulate packet drop
-		if(d < PACKET_DROP_PERCENTAGE)
+		if(_currentDrops < MAX_PACKET_DROPS && d < PACKET_DROP_PERCENTAGE){
+			log(true, SENDER.BOTH, "Faking a packet drop ... (seqNb=" + pck._seqNb + ", isAck=" + pck.isACK() + ")");
+			_currentDrops++;
 			return;
-		System.out.println("RECV");
+		}
 		
-		GBNCCMessage pck = (GBNCCMessage)datagram.getPayload();
+		
 		
 		if(pck._checksum == pck.getChecksum()){ // Not corrupted
 			if(pck.isACK()){ // ACK Packet is received from receiver
 				
-				System.out.println(pck._seqNb + " ACK'ed");
+				log(false, SENDER.SENDER, pck._seqNb + " ACK'ed");
 
 				_cc.receiveACK(pck._seqNb);
+				_window.remove(pck._seqNb); // Remove the received packet from the window
 				_sendBase = pck._seqNb + 1;
 
 				if(_sendBase == _nextSeqNb){
@@ -205,6 +236,8 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 				
 				if(_expSeqNb == pck._seqNb){ 
 					
+					log(false, SENDER.RECEIVER, "Packet received in correct order");
+					
 					byte[] data = pck._data;
 					
 					addBytesToReceiveList(data);
@@ -214,16 +247,17 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 					}
 						
 					_ack = new GBNCCMessage(_expSeqNb, true, null, true);
-					_ip.send(IPAddress.ANY, datagram.src, GBNCC_PROTOCOL, _ack);
+					trySendACK(false, SENDER.RECEIVER);
 					_expSeqNb++;
 					
 				}else {
-					trySendACK();
+					log(true, SENDER.RECEIVER, "Received wrong packet (seqNb=" + pck._seqNb + ", expectedSeqNb=" + _expSeqNb + ")");
+					trySendACK(true, SENDER.RECEIVER);
 				}
 			}
 		}else{
-			System.out.println("CORRUPTED GBNCC Packet");
-			trySendACK();
+			log(true, SENDER.BOTH, "CORRUPTED GBNCC Packet");
+			trySendACK(true, SENDER.BOTH);
 		}
 		
 		trySendPendingPackets();
@@ -240,8 +274,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		
 	}
 
-	public void trySendACK() throws Exception{
+	public void trySendACK(boolean error, SENDER sender) throws Exception{
 		if(_ack != null){
+			log(error, sender, "Sending ACK with seqNb = " + _ack._seqNb);
 			_ip.send(IPAddress.ANY, _dst, GBNCC_PROTOCOL, _ack);
 		}
 	}
@@ -249,11 +284,13 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	@Override
 	public void start() throws Exception {
 		_ip.addListener(GBNCC_PROTOCOL, this);
+		_resendTimer.start();	
 	}
 
 	@Override
 	public void stop() {
 		stopTimer();
+		_resendTimer.stop();
 		_ip.removeListener(GBNCC_PROTOCOL, this);
 		_window.clear();
 		_expSeqNb = 0;

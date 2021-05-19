@@ -13,7 +13,7 @@ public class RenoCC {
 	public RenoCC(GBNCCProtocol proto){}
 	
 	public void timeout(){
-		System.out.println("Time out, slow start on");
+		System.out.println("slow start on");
 		System.out.println("Cwnd " + _cwnd + " => " + 1);
 		_cwnd = 1;
 		_slowStart = true;
@@ -27,7 +27,7 @@ public class RenoCC {
 		int oldCwnd = _cwnd; 
 		if(sqNb == _lastACKSqNb){ // Duplicate ACK
 			_repeatedACK++;
-			if(_repeatedACK == MAX_DUP_ACK){ // 3 duplicate ACK
+			if(_repeatedACK >= MAX_DUP_ACK){ // 3 duplicate ACK
 				System.out.println("3 duplicate ACK");
 				_cwnd /= DUP_ACK_CWND_DIVIDE; // Divide cwnd by 2
 				if(_cwnd == 0) _cwnd = 1;
