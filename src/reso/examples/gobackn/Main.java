@@ -1,4 +1,6 @@
 package reso.examples.gobackn;
+
+import reso.common.AbstractTimer;
 import reso.common.Network;
 import reso.ethernet.EthernetAddress;
 import reso.ip.IPAddress;
@@ -9,12 +11,16 @@ import reso.scheduler.Scheduler;
 import reso.utilities.NetworkBuilder;
 
 public class Main {
+	
+	private static AbstractTimer _cwndTraceTimer;
 
 	public static void main(String[] args) {
 		
 		
+		
 		AbstractScheduler scheduler= new Scheduler();
 		Network network= new Network(scheduler);
+		
     	try {
     		final EthernetAddress MAC_ADDR1= EthernetAddress.getByAddress(0x00, 0x26, 0xbb, 0x4e, 0xfc, 0x28);
     		final EthernetAddress MAC_ADDR2= EthernetAddress.getByAddress(0x00, 0x26, 0xbb, 0x4e, 0xfc, 0x29);
@@ -25,14 +31,34 @@ public class Main {
     		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 0, 1);
     		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 1);
     		
-    		int packetsToSend = 100;
+    		int packetsToSend = 10000;
 
     		// Make host1 sending infos to host2
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
-    		host1.addApplication(new AppSender(host1, IP_ADDR2, "APP1", packetsToSend));
+    		AppSender host1App = new AppSender(host1, IP_ADDR2, "APP1", packetsToSend);
+    		host1.addApplication(host1App);
 
     		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR2, MAC_ADDR2);
-    		host2.addApplication(new AppReceiver(host2, IP_ADDR1, "APP2", packetsToSend));
+    		AppReceiver host2App = new AppReceiver(host2, IP_ADDR1, "APP2", packetsToSend);
+    		host2.addApplication(host2App);
+    		
+    		MainWindow w = new MainWindow(scheduler);
+    		w.setVisible(true);
+    		
+    		
+    		_cwndTraceTimer = new AbstractTimer(scheduler, 0.01, true) {
+				
+				@Override
+				protected void run() throws Exception {
+					w.addValue(host1App.getProto().getCwnd());
+					if(host2App.isDone()){
+						_cwndTraceTimer.stop();
+					}
+				}
+			};
+			
+			_cwndTraceTimer.start();
+    		
     		
     		
     		IPRouter router = NetworkBuilder.createRouter(network, "R1", 
@@ -85,7 +111,7 @@ public class Main {
     		host1.start();
     		
     		
-    		scheduler.runUntil(1000);
+    		scheduler.run();
     	} catch (Exception e) {
     		System.err.println(e.getMessage());
     		e.printStackTrace(System.err);

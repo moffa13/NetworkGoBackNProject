@@ -35,6 +35,10 @@ public class AppReceiver extends AbstractApplication implements Receiver {
 	public void stop() {
 		_ppl.stop();
 	}
+
+	public boolean isDone() {
+		return _packetNumber == _expPacketNumber;
+	}
 	
 	
 

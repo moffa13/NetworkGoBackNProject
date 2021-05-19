@@ -8,20 +8,25 @@ public class AppSender extends AbstractApplication implements Receiver {
 	
     private final int _nbPackets;
     private final IPAddress _dst;
+    private final GBNCCProtocol _proto;
     
 	public AppSender(IPHost host, IPAddress dst, String name, int nbPackets) {
 		super(host, name);
 		_nbPackets = nbPackets;	
 		_dst = dst;
+		_proto = new GBNCCProtocol(host, _dst, name);
 	}
 	
 	@Override
 	public void Receive(byte[] data) {}
+	
+	public GBNCCProtocol getProto(){
+		return _proto;
+	}
 
 	@Override
 	public void start() throws Exception{
-		GBNCCProtocol ppl = new GBNCCProtocol(host, _dst, name);
-		ppl.start();
+		_proto.start();
 		
 		Random r = new Random();
 		for(int i = 0; i < _nbPackets; i++){
@@ -29,7 +34,7 @@ public class AppSender extends AbstractApplication implements Receiver {
 			stb.append("Hello, ");
 			stb.append(r.nextInt());
 			System.out.println("Sending dummy data (" + stb.toString() + ")");
-			ppl.send(stb.toString().getBytes());
+			_proto.send(stb.toString().getBytes());
 		}	
 	}
 

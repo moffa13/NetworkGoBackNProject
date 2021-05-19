@@ -31,7 +31,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
 	public static final int TIMER_RESEND_INTERVAL = 1;
-	public static final double PACKET_DROP_PERCENTAGE = 0.05;
+	public static final double PACKET_DROP_PERCENTAGE = 0.01;
 	public static final int MAX_PACKET_DROPS = 10;
 	public static final int MSS = 10;  // bytes
 	private GBNCCMessage _ack = null;
@@ -178,18 +178,23 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	 */
 	public void timeout(boolean realTimeout) {
 			
-		if(realTimeout){
-			log(true, SENDER.SENDER, "Timeout detected..");
-			_cc.timeout();
-		}
+		
 			
 		// As the window can be shrinked, always check if _nextSeqNb is not outside,
 		// If yes, resend only all the packets in the window and not outside
 		int min = Math.min(_nextSeqNb, _sendBase + _cc.getWindowSize());
+		
+		
+		log(false, SENDER.SENDER, "Going to resend from " + _sendBase + " to " + (min - 1));
 				
 		for(int i = _sendBase; i < min; i++){
 			Message m = _window.get(i);
 			sendPacket(m);
+		}
+		
+		if(realTimeout){
+			log(true, SENDER.SENDER, "Timeout detected..");
+			_cc.timeout();
 		}
 		
 	}
@@ -318,5 +323,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 
 	public void setReceiver(Receiver rcv) {
 		_receiver = rcv;
+	}
+
+	public int getCwnd() {
+		return _cc.getWindowSize();
 	}
 }
