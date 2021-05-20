@@ -1,6 +1,5 @@
 package reso.examples.gobackn;
 
-import reso.common.AbstractTimer;
 import reso.common.Network;
 import reso.ethernet.EthernetAddress;
 import reso.ip.IPAddress;
@@ -11,8 +10,6 @@ import reso.scheduler.Scheduler;
 import reso.utilities.NetworkBuilder;
 
 public class Main {
-	
-	private static AbstractTimer _cwndTraceTimer;
 
 	public static void main(String[] args) {
 		
@@ -31,7 +28,7 @@ public class Main {
     		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 0, 1);
     		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 1);
     		
-    		int packetsToSend = 1000;
+    		int packetsToSend = 2000;
 
     		// Make host1 sending infos to host2
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
@@ -42,23 +39,8 @@ public class Main {
     		AppReceiver host2App = new AppReceiver(host2, IP_ADDR1, "APP2", packetsToSend);
     		host2.addApplication(host2App);
     		
-    		MainWindow w = new MainWindow(scheduler);
+    		MainWindow w = new MainWindow(scheduler, host1App, host2App);
     		w.setVisible(true);
-    		
-    		
-    		_cwndTraceTimer = new AbstractTimer(scheduler, 0.01, true) {
-				
-				@Override
-				protected void run() throws Exception {
-					w.addValue(host1App.getProto().getCwnd());
-					if(host2App.isDone()){
-						_cwndTraceTimer.stop();
-					}
-				}
-			};
-			
-			_cwndTraceTimer.start();
-    		
     		
     		
     		IPRouter router = NetworkBuilder.createRouter(network, "R1", 
@@ -79,11 +61,7 @@ public class Main {
 			
 
 			router.start();
-			host2.start();
-    		host1.start();
-    		
-    		
-    		scheduler.run();
+    	
     	} catch (Exception e) {
     		System.err.println(e.getMessage());
     		e.printStackTrace(System.err);

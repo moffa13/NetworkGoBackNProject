@@ -39,7 +39,9 @@ public class AppSender extends AbstractApplication implements Receiver {
 	}
 
 	@Override
-	public void stop() {}
+	public void stop() {
+		_proto.stop();
+	}
 	
 	
 

@@ -30,9 +30,9 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private HashMap<Integer, GBNCCMessage> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
-	public static final int TIMER_RESEND_INTERVAL = 5;
+	public static final double TIMER_RESEND_INTERVAL = 0.8;
 	public static final double PACKET_DROP_PERCENTAGE = 0.01;
-	public static final int MAX_PACKET_DROPS = 1;
+	public static final int MAX_PACKET_DROPS = 10;
 	public static final int MSS = 10;  // bytes
 	private GBNCCMessage _ack = null;
 	private final IPAddress _dst;
@@ -121,7 +121,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		while(canWindowHandle(1) && !_queuedMessages.isEmpty()){ // handle the older packets first as long as the window can take packets and the queue is not empty 
 			RawChunkMessage packet = _queuedMessages.poll();
 			try {
-				log(false, SENDER.SENDER, "Trying to send queued message");
+				log(false, SENDER.SENDER, "Trying to send queued message " + _sendBase + " " + _cc.getWindowSize());
 				sendData(packet._data, packet._lastMessage);
 			} catch (Exception e) {
 				// TODO Auto-generated catch block
@@ -187,11 +187,7 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	public void timeout(boolean realTimeout) {
 			
 		
-			
-		// As the window can be shrinked, always check if _nextSeqNb is not outside,
-		// If yes, resend only all the packets in the window and not outside
-		int min = Math.min(_nextSeqNb, _sendBase + _cc.getWindowSize());
-		
+		int min = getLastWindowIndex();
 		
 		log(false, SENDER.SENDER, "Going to resend from " + _sendBase + " to " + (min - 1));
 				
@@ -205,6 +201,12 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 			_cc.timeout();
 		}
 		
+	}
+	
+	public int getLastWindowIndex(){
+		// As the window can be shrinked, always check if _nextSeqNb is not outside,
+		// If yes, resend only all the packets in the window and not outside
+		return Math.min(_nextSeqNb, _sendBase + _cc.getWindowSize());
 	}
 	
 	/**
@@ -255,22 +257,20 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		if(pck._checksum == pck.getChecksum()){ 
 			if(pck.isACK()){ // ACK Packet is received from receiver
 				
-				
-				if(pck._seqNb >= _sendBase) {
-					log(false, SENDER.SENDER, pck._seqNb + " ACK'ed");
+				log(false, SENDER.SENDER, pck._seqNb + " ACK'ed");
 
-					_cc.receiveACK(pck._seqNb);
-					_window.remove(pck._seqNb); // Remove the received packet from the window
-					_sendBase = pck._seqNb + 1;
+				_cc.receiveACK(pck._seqNb);
+				_window.remove(pck._seqNb); // Remove the received packet from the window
+				_sendBase = pck._seqNb + 1;
 
-					if(_sendBase == _nextSeqNb){
-						stopTimer();
-					}else{
-						startTimer();
-					}
-					
-					trySendPendingPackets();
+				// Up to date
+				if(_sendBase == _nextSeqNb){
+					stopTimer();
+				}else{
+					startTimer();
 				}
+				
+				trySendPendingPackets();
 				
 				
 			}else{ // Data is received from the sender (we are receiver in that case)
@@ -283,18 +283,19 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 					
 					addBytesToReceiveList(data);
 					
+					// We have received the last chunked message or a single one
 					if(_receiver != null && pck.isLastMessage()) {
 						sendtoReceiver();
 					}
 						
 					_ack = new GBNCCMessage(_expSeqNb, true, null, true);
-					trySendACK(false, SENDER.RECEIVER);
 					_expSeqNb++;
 					
 				}else {
 					log(true, SENDER.RECEIVER, "Received wrong packet (seqNb=" + pck._seqNb + ", expectedSeqNb=" + _expSeqNb + ")");
-					trySendACK(false, SENDER.RECEIVER);
 				}
+				
+				trySendACK(false, SENDER.RECEIVER);
 			}
 		}else{
 			log(true, SENDER.BOTH, "CORRUPTED GBNCC Packet");
@@ -331,10 +332,14 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 		stopTimer();
 		_ip.removeListener(GBNCC_PROTOCOL, this);
 		_window.clear();
+		_queuedMessages.clear();
+		_receivedBytes.clear();
+		_currentDrops = 0;
 		_expSeqNb = 0;
 		_sendBase = 0;
 		_nextSeqNb = 0;		
-		
+		_ack = null;
+		_cc.reset();
 	}
 
 	public void setReceiver(Receiver rcv) {
