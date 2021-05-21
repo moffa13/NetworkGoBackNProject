@@ -6,13 +6,12 @@ import reso.ip.IPAddress;
 import reso.ip.IPHost;
 public class AppSender extends AbstractApplication implements Receiver {
 	
-    private final int _nbPackets;
     private final IPAddress _dst;
     private final GBNCCProtocol _proto;
+    public static int PACKETS_TO_SEND;
     
-	public AppSender(IPHost host, IPAddress dst, String name, int nbPackets) {
+	public AppSender(IPHost host, IPAddress dst, String name) {
 		super(host, name);
-		_nbPackets = nbPackets;	
 		_dst = dst;
 		_proto = new GBNCCProtocol(host, _dst, name);
 	}
@@ -29,7 +28,7 @@ public class AppSender extends AbstractApplication implements Receiver {
 		_proto.start();
 		
 		Random r = new Random();
-		for(int i = 0; i < _nbPackets; i++){
+		for(int i = 0; i < PACKETS_TO_SEND; i++){
 			StringBuilder stb = new StringBuilder();
 			stb.append("Hello, ");
 			stb.append(r.nextInt());

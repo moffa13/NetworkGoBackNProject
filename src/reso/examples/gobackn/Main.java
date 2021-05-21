@@ -28,15 +28,24 @@ public class Main {
     		final IPAddress IP_ADDR3= IPAddress.getByAddress(192, 168, 0, 1);
     		final IPAddress IP_ADDR4= IPAddress.getByAddress(192, 168, 1, 1);
     		
-    		int packetsToSend = 2000;
+    		
+    		/**
+    		 * Here are the parameters you can modify to change the simulation's behaviour.
+    		 */
+    		AppSender.PACKETS_TO_SEND = 2000;
+    		GBNCCProtocol.PACKET_DROP_PERCENTAGE = 0.01;
+    		GBNCCProtocol.TRANSMISSION_RATE_BYTE_PER_SEC = 40;
+    		GBNCCProtocol.MAX_PACKET_DROPS = 10;
+    		GBNCCProtocol.MSS = 10;  // bytes
+    		GBNCCProtocol.TIMER_RESEND_INTERVAL = 0.8;
 
     		// Make host1 sending infos to host2
     		IPHost host1= NetworkBuilder.createHost(network, "H1", IP_ADDR1, MAC_ADDR1);
-    		AppSender host1App = new AppSender(host1, IP_ADDR2, "APP1", packetsToSend);
+    		AppSender host1App = new AppSender(host1, IP_ADDR2, "APP1");
     		host1.addApplication(host1App);
 
     		IPHost host2= NetworkBuilder.createHost(network,"H2", IP_ADDR2, MAC_ADDR2);
-    		AppReceiver host2App = new AppReceiver(host2, IP_ADDR1, "APP2", packetsToSend);
+    		AppReceiver host2App = new AppReceiver(host2, IP_ADDR1, "APP2", AppSender.PACKETS_TO_SEND);
     		host2.addApplication(host2App);
     		
     		MainWindow w = new MainWindow(scheduler, host1App, host2App);

@@ -30,10 +30,11 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	private HashMap<Integer, GBNCCMessage> _window;
 	private Receiver _receiver;
 	public static final int GBNCC_PROTOCOL = Datagram.allocateProtocolNumber("GBNCC");
-	public static final double TIMER_RESEND_INTERVAL = 0.8;
-	public static final double PACKET_DROP_PERCENTAGE = 0.01;
-	public static final int MAX_PACKET_DROPS = 10;
-	public static final int MSS = 10;  // bytes
+	public static double TIMER_RESEND_INTERVAL;
+	public static double PACKET_DROP_PERCENTAGE;
+	public static int TRANSMISSION_RATE_BYTE_PER_SEC;
+	public static int MAX_PACKET_DROPS;
+	public static int MSS;  // bytes
 	private GBNCCMessage _ack = null;
 	private final IPAddress _dst;
 	private final RenoCC _cc;
@@ -96,12 +97,23 @@ public class GBNCCProtocol extends AbstractApplication implements IPInterfaceLis
 	 * @param m
 	 */
 	private void sendPacket(Message m){
-		try {
-			log(false, SENDER.SENDER, "Sending packet with seqNb = " + ((GBNCCMessage)m)._seqNb);
-			_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
-		} catch (Exception e) {
-			log(true, SENDER.BOTH, "Can not send Packet, " + e.getMessage());
-		}
+		new AbstractTimer(getHost().getNetwork().getScheduler(), timeToSendMSS(), false) {
+			
+			@Override
+			protected void run() throws Exception {
+				try {
+					log(false, SENDER.SENDER, "Sending packet with seqNb = " + ((GBNCCMessage)m)._seqNb);
+					_ip.send(_ip.getInterfaceByName("eth0").getAddress(), _dst, GBNCC_PROTOCOL, m);
+				} catch (Exception e) {
+					log(true, SENDER.BOTH, "Can not send Packet, " + e.getMessage());
+				}
+			}
+		}.start();
+		
+	}
+	
+	public static float timeToSendMSS() {
+		return 1 / (TRANSMISSION_RATE_BYTE_PER_SEC / (float)MSS);
 	}
 	
 	/**
